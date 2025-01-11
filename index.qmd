@@ -1,0 +1,255 @@
+---
+title: "Collecting Data: Project 1"
+format: 
+    html:
+        code-fold: true
+    pdf: 
+        toc: false
+jupyter: python3
+editor:
+    render-on-save: true
+---
+
+# Template
+
+## (Delete this section when you commit your report)
+
+For each project there'll be a template like this. I'll try to make the early templates more of a "fill in the blank" experience, but as the semester progresses you'll be seeing less and less scaffolding and more of bare bones layout with a lot of room for creativity and flexibility. The rubric will remain consistent for all the projects. When you are ready to commit your final report, you can delete this cell, and any other cells that are purely made up of instructions or guidance, and leave only the cells that belong in the final report.
+
+This doument is a [Quarto](https://quarto.org) markdown document. We're using Quarto in this class to prepare project reports. It has some nice features that make it well suited to this sort of task. For example it's easy to pull a graph from a notebook like this:
+
+{{< embed ExampleLinearFit.ipynb#curve_fit_example >}}
+
+It's easy to embed math, like this: $x=\sin(3t + \phi)$, right in your prose. You can also embed images that you've created and saved:
+
+![Fig. 1: The external circuit we used to implement a voltage divider and an RC circuit.](images/divider.png){fig-align="left" width="557"}
+
+Further, if you have a table of data that makes sense to include, that's also easy to do:
+
+{{< embed ExampleLinearFit.ipynb#read_data >}}
+
+The report should have 5 sections:
+
+1. Abstract and Description
+    * An abstract is a very brief statment of what was measured and the results produced. In the best case, there should be an estimate of uncertainty as well.
+    * The description is a more in-depth explanation of the experiments done, but without the result. This is not a "procedure," but simply an explanation of what was accomplished, and roughly how it was done.
+2. Schematic and Background
+    * A circuit schematic of each experiment. 
+    * Any background information needed to understand the circuits. 
+    * Any simulations you performed to prepare for measurements
+3. Function/Data Collection
+    * This is where you explain how you know the circuit functioned correctly.
+    * What data did you collect?
+    * How did you validate it?
+4. Results
+    * Analysis of data collected in part 3 to infer the values from the abstract.
+    * If there are statistical exercises in this project, you'll post the answers as a part of this section. Please state the question, and provide the solution. 
+5. Conclusion
+    * A summary of your inferences.
+
+Now it's time for the actual report. Delete everything above the line below, including the line! Within the report itself, all you need to do is to perform the actual experiments and replace both the data, and the results, with the actual data you collect, and the actual results you produce using that data. This week most of the work of writing, coding, and analyzing has already been done. All you need to do is to replace the sample data with real data. This is deliberately done so you'll have a concrete example of how to proceed in future weeks.
+
+----------------------------------
+
+# 1. Abstract and Description
+
+## Abstract
+
+We measured the voltage at two points in a resistor network to validate the behavior of the circuit. We found the ratio of voltages was: $0.665\pm 0.001$ close to the expected value of $0.667$. We also measured the decay over time of the voltage on a capacitor. We used that to estimate the decay time constant and found that to be $\tau = 66.57 \pm 0.34\mathrm{~ms}$, very close to the expected value of $\tau =66.67\mathrm{~ms}$. (Please replace these numbers with numbers from  your actual experiment and analysis. Then delete this parenthetical comment.)
+
+## Description
+
+The intention of this project is to be simple enough that the electrical circuits are not too confusing or difficult, but also authentic in the sense that one is collecting real data and doing legitimate analysis of that data to produce results.
+
+The project invoves two experiments. 
+
+1. To drive a resistor network and measure voltages in that network to make inferences. 
+2. To monitor the voltage across a discharging capacitor over time to infer the value of the time constant.
+
+# 2. Schematic and Background
+
+Both measurements for this week use the same schemtic:
+
+![Schematic Diagram for resistor/capacitor network](images/divider.png)
+
+In most projects you'll have some design decisions to make to choose devices and component values to produce a working circuit. In those cases this is where you'd describe those decisions and explain how to made them. This week the circuit is provided "as-is", so there are no design decisions to make, and no explanation is needed.
+
+For experiment 1 we'll use the DAC to drive pin 17 with ever increasing voltages. At the same time we'll be measuring the voltages at pins 15 and 10. So long as the voltages change slowly enough that the capacitor can fully charge between measurements, the voltage at pin 10 (adc2) should be proportional to the voltage at pin 15 (adc1) according to the standard voltage divider relationship:
+
+$$ v_2 = \frac{R_2}{R_1 + R_2} v_1 $$
+
+By driving and measuring $v_1$ and also measuring $v_2$, we can check that the measured ratio is close to the expected value.
+
+We can simulation this experiment using a DC sweep simulation.
+
+![DC Sweep](images/sim_divider_config.png)
+
+and graph the output:
+
+![DC Sweep Graph](images/sim_divider.png)
+
+For experiment 2 we'll charge the capacitor by driving pin-17 high as a digital output for a long time (much longer than the expected time constant of the circuit.) Then we'll bring pin-17 to ground and very quickly measure the voltage across the capacitor (at pin-10) as frequently as possible capture the decay curve over time. We know the theoretical decay curve should be exponential:
+
+$$ v_2(t) = v_0 e^{-t/\tau} $$
+
+We can use this model, and the data we collect, to infer the time constant.
+
+We can configure a transient simulation to check this:
+
+![decay transient configuration](images/sim_decay_config.png)
+
+and graph the output
+
+![graph of decay response](images/sim_decay.png)
+
+# 3. Function and Data Collection
+
+To measure the voltages $v_1$ and $v_2$ in the circuit we first had to discharge the capacitor, by pulling pin-17 low for a long time (3 sec). Then we had to go slowly, raising the voltage on pin-17 and then waiting to give the capactor time to charge after each voltage change. Since we expect the time constant of the capactor to be around $67\mathrm{~ms}$ we waited $400\mathrm{~ms}$ between measurements, just to be sure.
+
+```python
+import board # information about the physical microcontroller
+import analogio as aio # analog input and output library
+import time # standard python time library
+
+ADCMAX = 2**16-1 # maximum input/out from ADC or to DAC
+
+adc1 = aio.AnalogIn(board.IO15)  # to read voltage from pin 15
+adc2 = aio.AnalogIn(board.IO10)  # to read voltage from pin 10
+vfactor = adc1.reference_voltage/ADCMAX # get conversion factor voltage to pin
+
+vdac = aio.AnalogOut(board.IO17) # to control voltage on pin 17
+
+f = open('starter.csv','w')
+header = "j,vdac,v1,v2,time"
+
+
+vdac.value = 0 # set output voltage to zero
+print("sleeping.... let C fully discharge")
+print("3")
+time.sleep(1)
+print("2")
+time.sleep(1)
+print("1")
+time.sleep(1)
+print("0 --- go!")
+
+f.write(header + "\n")
+print(header)
+
+t0 = time.monotonic_ns()
+
+for i in range(0,255,5): # steps of 5 to save time
+    time.sleep(0.4) # let the cap charge....
+    t = time.monotonic_ns()-t0
+    vout = int((i/255)*ADCMAX)
+    vdac.value = vout
+    sval = f"{i},{vout*vfactor},{adc1.value*vfactor},{adc2.value*vfactor},{t/1e9}"
+    f.write(f"{sval}\n")
+    print(sval)
+
+vdac.value = 0 # let the LED rest...
+f.close()
+```
+
+An example of the data we collected can be seen here:
+
+{{< embed ControlAndMeasure.ipynb#divider_data >}}
+
+The raw data looks reasonable:
+
+{{< embed ControlAndMeasure.ipynb#raw_divider_data >}}
+
+For the second experiment we used a different program. This time we charged the capacitor fully, using pin-17 in digital output mode, and the dropped it suddenly. Then we wrote a tight loop, just measuring voltages and saving results without printing anything. After the data was captured, we reformatted and printed the data we had collected. The code to do this is below.
+
+```python
+import analogio as aio
+import digitalio as dio
+import board
+import time
+
+ADCMAX = 2**16-1
+
+adc1 = aio.AnalogIn(board.IO13) # analog ports
+adc2 = aio.AnalogIn(board.IO15)
+adc3 = aio.AnalogIn(board.IO10)
+vfactor = adc1.reference_voltage/ADCMAX
+
+dout = dio.DigitalInOut(board.IO17) # digital output
+dout.direction = dio.Direction.OUTPUT
+
+f = open('decay.csv','w')
+header = "j,v1,v2,v3,time"
+
+data = []
+
+dout.value = 1
+print("sleeping.... let C fully charge")
+print("3")
+time.sleep(1)
+print("2")
+time.sleep(1)
+print("1")
+time.sleep(1)
+print("0 --- go!")
+
+t0 = time.monotonic_ns()
+dout.value = 0
+
+for i in range(0,0xff,0x2): # measure quickly!
+    time.sleep(0.001)
+    data.append((i,adc1.value, adc2.value, adc3.value, time.monotonic_ns()-t0))
+
+f.write(header + "\n")
+print(header)
+
+for i in range(len(data)):
+    j,v1,v2,v3,t = data[i]
+    sval = f"{j},{v1*vfactor},{v2*vfactor},{v3*vfactor},{t/1e9}"
+    f.write(f"{sval}\n")
+    print(sval)
+    
+f.close()
+```
+
+A sample of the collected data is presented here:
+
+{{< embed ControlAndMeasure.ipynb#decay_raw_data >}}
+
+A graph of the raw data is here:
+
+{{< embed ControlAndMeasure.ipynb#decay_raw_graph >}}
+
+# 4. Results
+
+Once we have the data we can fit the voltage data to a the simple voltage divider model to infer the ratio:
+
+We can see this in the fit result from the [`CurveFitting.ipynb`](CurveFitting.ipynb) notebook:
+
+{{< embed CurveFitting.ipynb#ratio_result >}}
+
+Note that these are 5% resistors, we we'd be unsuprised to see a result witha variation of around 5%, or maybe a little more. However the actual result is within 3%, so it's pretty good. 
+
+We linearized the exponential model by taking the log of both sides, like so:
+
+$$ \log(v_1(t)) = \log(v_0) - t/\tau $$
+
+which looks a bit like:
+
+$$ y = m x + b $$
+
+but $y=\log(v_1(t))$, $x=t$, $b=\log(v_0)$, and $m=-1/\tau$.
+
+So we fit the data to a straight line model, similar to the voltage divider, and we got:
+
+{{< embed CurveFitting.ipynb#decay_fit >}}
+
+## Statistics Exercises
+
+The statistics exercises for this project were to perform the curve fitting for the two experiments. Please see above. 😊
+
+# 5. Conclusion
+
+We performed two experiments 1. measurements on a voltage divider to validate the value of the ratio of the bottom resistor to the whole network and 2. to measure the time constant of an RC network.  We found the ratio of voltages for the voltage divider was: $0.665\pm 0.001$ close to the expected value of $0.667$. We found the time constant of the RC circuit to be $tau = 66.57 \pm 0.34\mathrm{~ms}$, very close to the expected value of $66.67\mathrm{~ms}$.
+
+The goal of this project was to become famiar with all the tools we'll be using this semester in Laboratory Instrumentation and to make some real measurements, and analyze some real data. (Add anything else you like here, what you learned, suggested improvements, etc. Be sure to delete this parenthetical remark in your final report.)
+

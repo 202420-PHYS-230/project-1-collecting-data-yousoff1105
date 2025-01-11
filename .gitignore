@@ -1,0 +1,12 @@
+# things to ignore
+
+*~
+supervisord*
+*-backups
+*.lck
+.DS_Store
+
+/.quarto/
+/output
+
+*.quarto_ipynb

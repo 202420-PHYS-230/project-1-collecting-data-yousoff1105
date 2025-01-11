@@ -1,0 +1,5 @@
+project:
+  title: "Collecting Data: Project 1"
+  output-dir: output
+  preview: 
+    port: 7777
